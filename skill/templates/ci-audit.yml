@@ -1,0 +1,211 @@
+---
+# CI Audit Pipeline for Solana Programs
+# Runs on every push and pull request.
+# Jobs: cargo-audit (CVE scan), cargo-clippy (lint), cargo-deny (policy).
+#
+# Customize:
+#   - PROGRAM_CRATE: set to the name of your program crate (or remove if workspace root)
+#   - RUST_TOOLCHAIN: pinned to 1.96 per auditor sdk-versions.md
+#   - deny.toml: add a deny.toml at workspace root (see cargo-deny docs)
+#
+# All jobs run in parallel; PR merge requires all green.
+
+name: Solana Program Audit CI
+
+on:
+  push:
+    branches:
+      - main
+      - audit/**
+      - "fix/**"
+  pull_request:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # Override to target a specific workspace member if needed
+  PROGRAM_CRATE: ""
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: cargo audit -- known CVE scan against advisory database
+  # ---------------------------------------------------------------------------
+  cargo-audit:
+    name: "Security: cargo audit"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain 1.96
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96"
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-audit 0.22.2
+        run: cargo install cargo-audit --version "0.22.2" --locked
+
+      - name: Run cargo audit
+        # --deny warnings: treat any advisory as a failure (not just errors)
+        # --deny unsound:  fail on crates marked as unsound
+        run: cargo audit --deny warnings --deny unsound
+
+  # ---------------------------------------------------------------------------
+  # Job 2: cargo clippy -- static lint with all warnings as errors
+  # ---------------------------------------------------------------------------
+  cargo-clippy:
+    name: "Lint: cargo clippy"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain 1.96 with clippy
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96"
+          components: clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run cargo clippy (deny all warnings)
+        run: >
+          cargo clippy
+          --all-targets
+          --all-features
+          -- -D warnings
+
+      # Separate pass: flag every #[allow(...)] suppression for auditor review
+      - name: List suppressed clippy lints (informational)
+        run: |
+          echo "=== Suppressed clippy lints (review each) ==="
+          grep -rn "#\[allow(" src/ || echo "None found"
+        continue-on-error: true
+
+  # ---------------------------------------------------------------------------
+  # Job 3: cargo deny -- license compliance + banned crate policy
+  # ---------------------------------------------------------------------------
+  cargo-deny:
+    name: "Policy: cargo deny"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain 1.96
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96"
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-deny
+        # cargo-deny does not publish 1.x yet; pin to a verified minor version.
+        # Run `cargo search cargo-deny` to confirm latest before pinning.
+        run: cargo install cargo-deny --locked
+
+      - name: Run cargo deny check
+        # Checks: advisories (CVE db), licenses, bans (forbidden crates), sources
+        run: cargo deny check
+
+  # ---------------------------------------------------------------------------
+  # Job 4: cargo geiger -- unsafe code inventory
+  # Reports but does NOT fail the build (unsafe may be intentional).
+  # Auditor reviews the output for unexpected unsafe blocks.
+  # ---------------------------------------------------------------------------
+  cargo-geiger:
+    name: "Unsafe: cargo geiger inventory"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain 1.96
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96"
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-geiger
+        # Verify latest on crates.io: cargo search cargo-geiger
+        run: cargo install cargo-geiger --locked
+
+      - name: Run cargo geiger (informational)
+        run: cargo geiger --all-features 2>&1 || true
+        # continue-on-error: informational only; auditor must review output.
+
+  # ---------------------------------------------------------------------------
+  # Job 5: Unit tests + litesvm integration tests (if present)
+  # ---------------------------------------------------------------------------
+  test:
+    name: "Tests: cargo test"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain 1.96
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.96"
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Run tests
+        # litesvm 0.12 tests run in-process; no validator needed
+        run: cargo test --all-features -- --test-threads=1
+
+# ---------------------------------------------------------------------------
+# Required status checks (add to branch protection rules in GitHub):
+#   - Security: cargo audit
+#   - Lint: cargo clippy
+#   - Policy: cargo deny
+#   - Tests: cargo test
+#
+# cargo geiger is informational and intentionally excluded from required checks.
+# ---------------------------------------------------------------------------
