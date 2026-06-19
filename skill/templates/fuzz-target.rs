@@ -2,30 +2,48 @@
 //
 // CUSTOMIZE markers below show every program-specific fill-in point.
 //
-// TOOL CHOICE:
+// TOOL CHOICE (last-verified 2026-06):
 //   - Anchor programs: use Trident (https://github.com/Ackee-Blockchain/trident)
-//     Trident generates Anchor-aware fuzz accounts + instructions automatically.
+//     Trident is a stateful, manually-guided Anchor fuzzer: it derives fuzz
+//     accounts + instructions from your IDL and lets you script flow-based
+//     instruction sequences with invariant checks between steps. Since 0.11 it
+//     runs on its OWN native engine (TridentSVM, built on Anza's SVM API) - it no
+//     longer wraps honggfuzz/AFL and is cross-platform (Linux/macOS/Windows).
 //     See setup section below.
-//   - Non-Anchor / custom programs: use honggfuzz-rs
+//   - Non-Anchor / custom pure-Rust functions: use honggfuzz-rs
 //     (https://github.com/rust-fuzz/honggfuzz-rs)
-//     This file provides the honggfuzz-rs entry point; adapt for Trident if needed.
+//     This file provides the honggfuzz-rs entry point; use it to fuzz an isolated
+//     math/parsing routine you can lift out of the program.
 //
 // REQUIREMENTS (needs cargo + tooling installed):
 //
-// For honggfuzz-rs:
-//   cargo install honggfuzz
+// For honggfuzz-rs (non-Anchor):
+//   cargo install honggfuzz --version 0.5.60 --locked   # last-verified 2026-06
 //   [dev-dependencies]
 //   honggfuzz = "0.5"
-//   litesvm = "0.12"
-//   solana-sdk = "4.0"
 //   arbitrary = { version = "1", features = ["derive"] }
+//   # If the harness drives a program through litesvm, use the SAME granular
+//   # solana-* crate set as templates/litesvm-harness.rs (litesvm is on the
+//   # solana 3.x crate line - do NOT pull in solana-sdk 4.x):
+//   litesvm                 = "0.13"
+//   solana-keypair          = "3.1"
+//   solana-signer           = "3"
+//   solana-instruction      = "=3.2"
+//   solana-transaction      = { version = "3.1", features = ["bincode"] }
+//   solana-pubkey           = { version = "4", features = ["curve25519"] }
+//   solana-system-interface = "3"
+//   # Host-build features: solana-transaction "bincode" (new_signed_with_payer)
+//   # and solana-pubkey "curve25519" (find_program_address off-chain).
 //
 // For Trident (Anchor programs, PREFERRED):
-//   cargo install trident-cli       # verify latest version on crates.io
+//   cargo install trident-cli       # trident-cli 0.12.0 stable (last-verified 2026-06;
+//                                   # pairs with trident-fuzz 0.12.0 - the trident
+//                                   # crates version in lockstep; 0.13.0-rc.* are
+//                                   # prereleases - do not pin a prerelease)
 //   trident init                    # run from workspace root
-//   trident fuzz run fuzz_<target>  # run the generated harness
-//   NOTE: Trident version pinned here is best-effort; run `cargo search trident-cli`
-//         to confirm current release before using.
+//   trident fuzz run <target>       # run the generated harness
+//   NOTE: re-confirm trident-cli's anchor-lang compatibility for your release
+//         (`cargo search trident-cli`); the fuzzer moves independently of the SDK.
 //
 // Run (honggfuzz-rs):
 //   cargo hfuzz run fuzz_program
@@ -41,13 +59,12 @@
 use arbitrary::Arbitrary;
 use honggfuzz::fuzz;
 use litesvm::LiteSVM;
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    system_program,
-    transaction::Transaction,
-};
+use solana_instruction::{AccountMeta, Instruction};
+use solana_keypair::Keypair;
+use solana_pubkey::Pubkey;
+use solana_signer::Signer;
+use solana_system_interface::program as system_program;
+use solana_transaction::Transaction;
 
 // ---------------------------------------------------------------------------
 // CUSTOMIZE: compiled program ELF (built from source with `cargo build-sbf`)
@@ -228,7 +245,7 @@ fn main() {
 
     fuzz!(|input: FuzzInput| {
         // Clone or checkpoint SVM state so each iteration starts from a known baseline.
-        // litesvm 0.12 supports snapshotting; use it to isolate iterations:
+        // litesvm 0.13 implements Clone; use it to isolate iterations:
         let mut iter_svm = svm.clone();
 
         let ix = build_instruction(program_id(), &input, &accounts);
@@ -257,25 +274,33 @@ fn main() {
 }
 
 // ===========================================================================
-// TRIDENT SETUP NOTES (preferred for Anchor programs)
+// TRIDENT SETUP NOTES (preferred for Anchor programs) - last-verified 2026-06
 // ===========================================================================
+// Trident is now a multi-crate project: trident-cli 0.12.0 (stable) drives
+// trident-fuzz 0.12.0 - the trident crates version in lockstep (trident-cli
+// 0.12.0 depends on trident-client ^0.12.0). (0.13.0-rc.* prereleases exist;
+// do not pin a prerelease.)
+//
 // 1. Install:  cargo install trident-cli
 // 2. From workspace root:  trident init
 //    Trident reads your Anchor IDL and generates:
-//      trident-tests/fuzz_tests/fuzz_0/test_fuzz.rs  <- generated harness
+//      trident-tests/fuzz_tests/<target>/test_fuzz.rs  <- generated harness
 //      Trident.toml
-// 3. Customize FuzzInstruction impls in the generated harness to set
-//    account constraints (e.g., reuse PDAs across iterations).
-// 4. Run:  trident fuzz run fuzz_0
+// 3. Customize the FuzzInstruction impls in the generated harness to set
+//    account constraints (e.g., reuse PDAs across iterations) and to script
+//    flow-based instruction sequences (Trident is a stateful, guided fuzzer).
+// 4. Run:  trident fuzz run <target>
 // 5. Reproduce a crash:
-//    trident fuzz debug fuzz_0 <path-to-crash-file>
+//    trident fuzz debug <target> <path-to-crash-file>
 //
-// Trident uses AFL++ under the hood on Linux for better coverage feedback.
-// On macOS, it falls back to a simpler mutation engine.
+// Engine: since 0.11, Trident runs on its OWN native execution engine
+// (TridentSVM, built on Anza's SVM API). It does NOT wrap honggfuzz or AFL++
+// anymore and is cross-platform (Linux/macOS/Windows) with consistent behavior.
 //
 // Key Trident concepts to customize:
 //   - get_accounts(): deterministically derive or create accounts per iteration.
 //   - get_data():     control the instruction argument space.
 //   - check():        assert post-instruction invariants (panics = findings).
 //
-// For non-Anchor programs, the honggfuzz-rs harness above is the right approach.
+// For non-Anchor pure-Rust functions, the honggfuzz-rs harness above is the
+// right approach; verify honggfuzz-rs's current release (0.5.60, 2026-06) first.

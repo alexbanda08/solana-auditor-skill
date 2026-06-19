@@ -1,14 +1,31 @@
 // litesvm PoC exploit / invariant test harness
-// Tool: litesvm 0.12.0 + anchor-lang 1.0.2
+// Tool: litesvm 0.13.0 + anchor-lang 1.0.2 (last-verified 2026-06)
 //
 // PURPOSE: Demonstrate a finding in an isolated, reproducible environment.
 //          Replace every TODO block with program-specific values before running.
 //
 // REQUIREMENTS (needs cargo):
 //   [dev-dependencies]
-//   litesvm = "0.12"
-//   anchor-lang = "1.0"
-//   solana-sdk = "4.0"
+//   litesvm                = "0.13"
+//   anchor-lang            = "1.0"     # only if the target is an Anchor program
+//   # litesvm's public API is built on the solana 3.x crate line, so a litesvm
+//   # test crate must use the granular solana-* crates below - NOT solana-sdk 4.x.
+//   # Pulling solana-sdk 4.x into a litesvm test crate gives you a v4 Transaction
+//   # /Message/Instruction that will NOT unify with the v3 types litesvm accepts
+//   # (cargo cannot link two majors of solana-transaction/-message) -> E0308.
+//   solana-keypair          = "3.1"
+//   solana-signer           = "3"
+//   solana-instruction      = "=3.2"   # litesvm 0.13 pins =3.2.0; match exactly
+//   solana-transaction      = { version = "3.1", features = ["bincode"] }
+//   solana-pubkey           = { version = "4", features = ["curve25519"] }
+//   solana-system-interface = "3"
+//   # Notes on features (these matter for a HOST test build, not BPF):
+//   #   - Transaction::new_signed_with_payer is behind solana-transaction's
+//   #     "bincode" feature.
+//   #   - Pubkey::find_program_address is behind solana-pubkey's "curve25519"
+//   #     feature off-chain (it is always available under target_os = "solana").
+//   #   - Pubkey is a re-export of solana_address::Address, so a Pubkey value
+//   #     passes directly to litesvm's airdrop/get_account/add_program (Address).
 //
 // Run:
 //   cargo test --test litesvm_poc -- --nocapture
@@ -17,13 +34,12 @@
 //       because it depends on crates. Build with `cargo test`.
 
 use litesvm::LiteSVM;
-use solana_sdk::{
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    signature::{Keypair, Signer},
-    system_program,
-    transaction::Transaction,
-};
+use solana_instruction::{AccountMeta, Instruction};
+use solana_keypair::Keypair;
+use solana_pubkey::Pubkey;
+use solana_signer::Signer;
+use solana_system_interface::program as system_program;
+use solana_transaction::Transaction;
 
 // ---------------------------------------------------------------------------
 // CUSTOMIZE: Replace with your program's ELF path (built from source)

@@ -6,7 +6,7 @@ This skill fills the empty official seed `solanabr/solana-auditor-skill` (Supert
 
 ## The problem
 
-Auditing a Solana program is a high-skill, error-prone, multi-tool job. A reviewer has to scope the attack surface, run a handful of static tools (`cargo-audit`, `clippy`, `cargo-deny`, `cargo-geiger`), reason manually about Solana-specific bug classes that have no analogue on the EVM (missing signer/owner checks, PDA canonical-bump misuse, account type confusion, arbitrary CPI), prove each finding with a runnable exploit, and then write it all up at the right severity. The official seed for this workflow shipped empty. There was no agent-native, opinionated lifecycle to drive it.
+Auditing a Solana program is a high-skill, error-prone, multi-tool job. A reviewer has to scope the attack surface, run a handful of static tools (`cargo-audit`, `clippy`, `cargo-deny`, `cargo-geiger`), reason manually about Solana-specific bug classes that have no analogue on the EVM (missing signer/owner checks, PDA canonical-bump misuse, PDA sharing / authority overreach, account type confusion, arbitrary CPI), prove each finding with a runnable exploit, and then write it all up at the right severity. The official seed for this workflow shipped empty. There was no agent-native, opinionated lifecycle to drive it.
 
 ## What it does
 
@@ -58,14 +58,16 @@ The skill is discovered by its `SKILL.md` frontmatter and triggers on Solana aud
 | Tool | Version |
 | --- | --- |
 | cargo-audit | 0.22.2 |
-| litesvm | 0.12.0 |
+| litesvm | 0.13.0 |
 | anchor-lang | 1.0.2 |
-| Rust toolchain | 1.96 (edition 2021) |
-| cargo clippy / cargo-deny / cargo-geiger | bundled / verify latest |
-| trident (Anchor fuzzing) | verify latest |
-| honggfuzz-rs | verify latest |
+| Host Rust toolchain | latest stable (~1.95, edition 2021); SBF builds use platform-tools via `cargo build-sbf` |
+| cargo clippy | bundled |
+| cargo-deny | 0.19.9 |
+| cargo-geiger | 0.13.0 |
+| trident-cli (Anchor fuzzing) | 0.12.0 (trident-fuzz 0.12.0) |
+| honggfuzz-rs | 0.5.60 |
 
-Versions last verified 2026-06; run `cargo search` / `cargo add` to confirm latest. See `skill/references/sdk-versions.md`.
+Versions last verified 2026-06; run `cargo search` / `cargo add` to re-confirm at audit time. litesvm is built on the solana 3.x crate line, so litesvm PoC dev-deps use the granular `solana-*` crates (not `solana-sdk` 4.x) - see `skill/references/sdk-versions.md`.
 
 ## License
 

@@ -111,9 +111,10 @@ For pinned tool versions and install instructions see
    unknown-git = "warn"
    ```
 
-9. Run:
+9. Install cargo-deny if not present, then run:
 
    ```bash
+   cargo install cargo-deny --version 0.19.9 --locked   # last-verified 2026-06
    cargo deny check 2>&1 | tee deny.log
    ```
 
@@ -134,8 +135,9 @@ For pinned tool versions and install instructions see
 11. Install cargo-geiger if not present:
 
     ```bash
-    cargo install cargo-geiger --locked
-    # Note: verify current version with `cargo search cargo-geiger`
+    cargo install cargo-geiger --version 0.13.0 --locked   # last-verified 2026-06
+    # Note: cargo-geiger may lag the newest host toolchain; if install fails, fall
+    # back to a grep sweep for `unsafe` (see static-analysis.md). Re-confirm latest.
     ```
 
 12. Run:

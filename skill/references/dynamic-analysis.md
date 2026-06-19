@@ -12,21 +12,31 @@ program `.so`; they do not run offline without the toolchain.
 
 ---
 
-## LiteSVM (0.12) - fast exploit/invariant PoC
+## LiteSVM (0.13) - fast exploit/invariant PoC
 
 LiteSVM is an in-process SVM: no validator, no RPC, no ledger. It loads your
 program `.so` and lets you build, sign, and send transactions in microseconds,
 inspect accounts directly, and assert on results. This is the default tool for a
 per-finding PoC. Scaffold: templates/litesvm-harness.rs.
 
+Dev-deps: litesvm 0.13 is built on the solana 3.x crate line, so a litesvm test
+crate uses the granular `solana-*` crates (NOT `solana-sdk` 4.x, whose v4
+Transaction/Message/Instruction types will not unify with litesvm's v3 ones).
+The exact pin set is in references/sdk-versions.md.
+
 Minimal exploit PoC shape:
 
 ```rust
 use litesvm::LiteSVM;
-use solana_sdk::{signature::Keypair, signer::Signer, transaction::Transaction};
+use solana_keypair::Keypair;
+use solana_signer::Signer;
+use solana_transaction::Transaction;
 
 let mut svm = LiteSVM::new();
-svm.add_program_from_file(program_id, "target/deploy/program.so").unwrap();
+// Canonical loader: bytes via include_bytes! (this is what the template scaffolds).
+// (svm.add_program_from_file(program_id, "target/deploy/program.so") loads from a
+//  path instead - both exist in 0.13; pick one.)
+svm.add_program(program_id, PROGRAM_ELF).unwrap();
 
 let attacker = Keypair::new();
 svm.airdrop(&attacker.pubkey(), 10_000_000_000).unwrap();
@@ -71,13 +81,19 @@ and stateful handlers where a single edge case (overflow, rounding, ordering) dr
 funds. Scaffold and tool choice rationale: templates/fuzz-target.rs.
 
 Tool choice:
-- trident (Anchor program fuzzer) - generates instruction sequences against an
-  Anchor program and checks invariants between steps. Preferred when the target is
-  Anchor and you want sequence-level coverage. Verify the current version supports
-  your anchor-lang (see references/sdk-versions.md); it is younger than the core SDK.
-- honggfuzz-rs - coverage-guided fuzzing of a pure Rust function. Preferred for an
-  isolated math/parsing routine (fee curve, tick math, deserializer) you can lift
-  out of the program and feed raw bytes/values.
+- trident (Anchor program fuzzer) - a stateful, manually-guided fuzzer that derives
+  fuzz accounts + instructions from your IDL and lets you script flow-based
+  instruction sequences with invariant checks between steps. Since 0.11 it runs on
+  its own native engine (TridentSVM, on Anza's SVM API) - no honggfuzz/AFL wrapper -
+  and is cross-platform. Preferred when the target is Anchor and you want
+  sequence-level coverage. Pin trident-cli 0.12.0 (stable; the trident crates move
+  in lockstep, so this pairs with trident-fuzz 0.12.0) and
+  verify it supports your anchor-lang (references/sdk-versions.md); it moves
+  independently of the core SDK. Install: `cargo install trident-cli`, then
+  `trident init` and `trident fuzz run <target>`.
+- honggfuzz-rs (0.5.60) - coverage-guided fuzzing of a pure (non-Anchor) Rust
+  function. Preferred for an isolated math/parsing routine (fee curve, tick math,
+  deserializer) you can lift out of the program and feed raw bytes/values.
 
 What to assert (invariants, not just "no panic"):
 - Conservation: total in == total out across an instruction (no mint without burn).

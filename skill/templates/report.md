@@ -285,15 +285,18 @@ Remediation implementation: see `references/delegation.md` -> `../solana-dev/`.
 
 | Tool | Version |
 |---|---|
-| Rust toolchain | 1.96 |
+| Host Rust toolchain | latest stable (~1.95); SBF builds via platform-tools (`cargo build-sbf`) |
 | anchor-lang | 1.0.2 |
 | cargo-audit | 0.22.2 |
-| litesvm | 0.12.0 |
+| litesvm | 0.13.0 |
 | cargo clippy | (rustup component) |
-| cargo-deny | verify via `cargo search cargo-deny` |
-| cargo-geiger | verify via `cargo search cargo-geiger` |
+| cargo-deny | 0.19.9 |
+| cargo-geiger | 0.13.0 |
+| trident-cli | 0.12.0 (trident-fuzz 0.12.0) |
+| honggfuzz-rs | 0.5.60 |
 
-See `references/sdk-versions.md` for canonical version list. last-verified 2026-06.
+See `references/sdk-versions.md` for canonical version list. last-verified 2026-06;
+re-confirm at audit time.
 
 ---
 

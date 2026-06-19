@@ -7,7 +7,7 @@
     {
       "name": "solana-auditor-skill",
       "source": "./",
-      "description": "Practical Solana/Anchor security audit workflow (static + manual + dynamic + report) complementing formal-verification tools. Covers the full audit lifecycle: Scope -> Static analysis (cargo-audit, clippy, cargo-deny, cargo-geiger) -> Manual review (15-class vuln taxonomy) -> Dynamic testing (litesvm PoC harness, fuzzing) -> Severity-graded report. Delegates program fixes to solana-dev and formal proofs to QEDGen.",
+      "description": "Practical Solana/Anchor security audit workflow (static + manual + dynamic + report) complementing formal-verification tools. Covers the full audit lifecycle: Scope -> Static analysis (cargo-audit, clippy, cargo-deny, cargo-geiger) -> Manual review (16-class vuln taxonomy) -> Dynamic testing (litesvm PoC harness, fuzzing) -> Severity-graded report. Delegates program fixes to solana-dev and formal proofs to QEDGen.",
       "version": "0.1.0",
       "license": "MIT",
       "keywords": [

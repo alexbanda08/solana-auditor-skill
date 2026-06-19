@@ -56,37 +56,39 @@ Run through phases in order: Scope -> Static -> Manual -> Dynamic.
 | # | Check | Y/N/NA | Where to Look |
 |---|-------|--------|---------------|
 | 3.7 | Discriminator (Anchor) or custom tag verified on deserialization | | `Account<'info, T>` handles this; raw `try_from_slice` does not |
-| 3.8 | No two instructions accept the same account in conflicting roles | | Cross-instruction account reuse; mutable aliasing |
-| 3.9 | Remaining_accounts elements are validated (owner, writable, signer) before use | | Every loop over `ctx.remaining_accounts` |
+| 3.8 | Stored relationship fields (authority/owner/mint) are bound to the passed account | | `has_one = authority`; explicit `stored == passed.key()` checks (vuln class 3b) |
+| 3.9 | No two instructions accept the same account in conflicting roles | | Cross-instruction account reuse; mutable aliasing |
+| 3.10 | Remaining_accounts elements are validated (owner, writable, signer) before use | | Every loop over `ctx.remaining_accounts` |
 
 ### 3d. PDA Checks
 
 | # | Check | Y/N/NA | Where to Look |
 |---|-------|--------|---------------|
-| 3.10 | `bump` stored in account state comes from `find_program_address`; not accepted from user | | `seeds::program`, `bump` constraint vs. stored bump field |
-| 3.11 | Canonical bump enforced (`seeds = [...], bump = account.bump`) | | `bump =` vs. `bump` (unconstrained) in Anchor attribute |
-| 3.12 | PDA seeds cannot be manipulated to collide with another account | | Seed composition; user-controlled seed segments |
+| 3.11 | `bump` stored in account state comes from `find_program_address`; not accepted from user | | `seeds::program`, `bump` constraint vs. stored bump field |
+| 3.12 | Canonical bump enforced (`seeds = [...], bump = account.bump`) | | `bump =` vs. `bump` (unconstrained) in Anchor attribute |
+| 3.13 | PDA seeds cannot be manipulated to collide with another account | | Seed composition; user-controlled seed segments |
+| 3.14 | PDA used as a signer is bound to its domain (seeds include the user/account key); no shared-authority overreach | | `invoke_signed` seeds; global `[b"authority"]` PDAs (vuln class 16) |
 
 ### 3e. Reinitialization
 
 | # | Check | Y/N/NA | Where to Look |
 |---|-------|--------|---------------|
-| 3.13 | Initialized accounts use `init` or explicit `is_initialized` guard | | `init` constraint; manual check in handler body |
-| 3.14 | No instruction can overwrite a live account's discriminator or state | | `init_if_needed` usage flagged and reviewed carefully |
+| 3.15 | Initialized accounts use `init` or explicit `is_initialized` guard | | `init` constraint; manual check in handler body |
+| 3.16 | No instruction can overwrite a live account's discriminator or state | | `init_if_needed` usage flagged and reviewed carefully |
 
 ### 3f. Close-Account and Revival
 
 | # | Check | Y/N/NA | Where to Look |
 |---|-------|--------|---------------|
-| 3.15 | Closed accounts use `close = destination` (Anchor) wiping discriminator | | `#[account(close = ...)]` constraint |
-| 3.16 | Closed account pubkeys cannot be reused in same tx to bypass checks | | Same-tx ordering; revival attacks documented |
+| 3.17 | Closed accounts use `close = destination` (Anchor) wiping discriminator | | `#[account(close = ...)]` constraint |
+| 3.18 | Closed account pubkeys cannot be reused in same tx to bypass checks | | Same-tx ordering; revival attacks documented |
 
 ### 3g. Duplicate Mutable Accounts
 
 | # | Check | Y/N/NA | Where to Look |
 |---|-------|--------|---------------|
-| 3.17 | No two writable accounts in one instruction can resolve to same pubkey | | Anchor `constraint = a.key() != b.key()` guards |
-| 3.18 | Token source != token destination enforced on transfer instructions | | `constraint = src.key() != dst.key()` |
+| 3.19 | No two writable accounts in one instruction can resolve to same pubkey | | Anchor `constraint = a.key() != b.key()` guards |
+| 3.20 | Token source != token destination enforced on transfer instructions | | `constraint = src.key() != dst.key()` |
 
 ---
 
@@ -151,13 +153,13 @@ Run through phases in order: Scope -> Static -> Manual -> Dynamic.
 |-------|-------|---|---------------|----|
 | 1. Scope | 6 | | | |
 | 2. Static | 7 | | | |
-| 3. Account Validation | 18 | | | |
+| 3. Account Validation | 20 | | | |
 | 4. Arithmetic | 5 | | | |
 | 5. CPI Safety | 4 | | | |
 | 6. Token/Lamport Flows | 4 | | | |
 | 7. Admin Controls | 3 | | | |
 | 8. Dynamic | 4 | | | |
-| **TOTAL** | **51** | | | |
+| **TOTAL** | **53** | | | |
 
 **Auditor:** ___________________  
 **Date:** ___________________  

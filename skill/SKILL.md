@@ -1,6 +1,6 @@
 ---
 name: solana-auditor
-description: Solana/Anchor program security audit workflow - scope the attack surface, run static analysis (cargo-audit/clippy/deny/geiger), manual vuln review (signer/owner/PDA-bump/CPI/overflow/type-confusion/close-revival), dynamic analysis (litesvm PoC, fuzzing), and severity-graded reporting; use when asked to audit, security-review, find vulnerabilities in, or write a findings report for a Solana program.
+description: Solana/Anchor program security audit workflow - scope the attack surface, run static analysis (cargo-audit/clippy/deny/geiger), manual vuln review (signer/owner/PDA-bump/PDA-sharing/CPI/overflow/type-confusion/close-revival), dynamic analysis (litesvm PoC, fuzzing), and severity-graded reporting; use when asked to audit, security-review, find vulnerabilities in, or write a findings report for a Solana program.
 user-invocable: true
 ---
 

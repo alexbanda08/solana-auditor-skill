@@ -41,7 +41,7 @@ Load ONLY the leaf the current task requires. Do not bulk-load.
 ## Templates available
 
 - `templates/audit-checklist.md` - actionable per-program checklist
-- `templates/litesvm-harness.rs` - litesvm 0.12 PoC/invariant test scaffold
+- `templates/litesvm-harness.rs` - litesvm 0.13 PoC/invariant test scaffold
 - `templates/fuzz-target.rs` - trident/honggfuzz fuzz harness scaffold
 - `templates/ci-audit.yml` - GitHub Actions: cargo-audit + clippy + cargo-deny
 - `templates/report.md` - severity-graded findings report skeleton

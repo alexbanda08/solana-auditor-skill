@@ -28,13 +28,26 @@ anchor-lang 1.0 constraints.
   in native code before deserializing.
 
 ## 3. Account data matching / type confusion
-- WHAT: two account types share a layout; one is passed where the other is expected.
-- WHY: without a discriminator check, struct A's bytes are interpreted as struct B,
-  letting an attacker substitute state.
-- DETECT: native `try_from_slice` with no type tag; manual deserialization of
+- WHAT: two related but distinct bugs. (a) TYPE CONFUSION: two account types share a
+  layout and one is passed where the other is expected. (b) ACCOUNT DATA MATCHING
+  (sealevel-attacks #1): a stored relationship field on a loaded account (e.g.
+  `config.authority`, `vault.owner`, `pool.mint`) is trusted without checking it
+  against the account actually passed - so an attacker supplies a state account
+  whose stored field they control.
+- WHY: (a) without a discriminator check, struct A's bytes are interpreted as struct
+  B, letting an attacker substitute state. (b) without binding the stored field to
+  the passed account, the relationship check is vacuous - the attacker chooses both
+  sides.
+- DETECT: (a) native `try_from_slice` with no type tag; manual deserialization of
   `AccountInfo`; missing or hand-rolled discriminator; reused PDAs across types.
-- FIX: Anchor's 8-byte discriminator (auto via `#[account]`) or an explicit type
-  tag checked on every load.
+  (b) a stored pubkey field read and used for authorization without a `has_one`
+  (Anchor) or explicit `stored_field == passed_account.key()` check; admin paths
+  gated only on a value the caller supplies.
+- FIX: (a) Anchor's 8-byte discriminator (auto via `#[account]`) or an explicit type
+  tag checked on every load. (b) bind the relationship: Anchor `has_one = authority`
+  (and ensure the named target is itself a checked `Signer`/`Account`), or an
+  explicit key-equality constraint. Cross-link: references/anchor-checks.md
+  (`has_one`).
 
 ## 4. Arbitrary CPI / unchecked program id
 - WHAT: a cross-program invocation targets a program id taken from input.
@@ -150,6 +163,23 @@ anchor-lang 1.0 constraints.
 - FIX: multisig/governance or renounced upgrade authority; timelock sensitive
   admin actions; document the trust assumption explicitly in the report (this is
   often an Info/Low disclosure rather than a code bug, but always disclose it).
+
+## 16. PDA sharing / authority overreach
+- WHAT: one PDA (often a vault or signing authority) is derived from seeds too
+  coarse to bind it to a single user/domain, then used to sign for many. This is
+  distinct from class 5 (canonical-bump misuse) and class 11 (duplicate mutable):
+  the bump may be canonical and the accounts distinct, yet the seeds are too broad.
+- WHY: because the signing PDA is shared, an attacker reuses it to authorize
+  actions on accounts they should not control - moving funds out of, or signing on
+  behalf of, another user's state under the same global authority.
+- DETECT: `invoke_signed` with signer seeds that omit a per-user/per-account
+  discriminator; a single global authority PDA used across distinct user states;
+  seeds like `[b"authority"]` or `[b"vault"]` with no owner/user component; one PDA
+  set as the `authority`/`owner` of many users' token accounts.
+- FIX: include the owning account/user pubkey (or other domain discriminator) in
+  the seeds so each domain gets its own PDA, e.g.
+  `seeds = [b"authority", user.key().as_ref()]`; never sign cross-domain with a
+  shared-seed PDA. See references/anchor-checks.md (seeds/bump).
 
 ---
 

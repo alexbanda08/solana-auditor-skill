@@ -5,7 +5,9 @@
 #
 # Customize:
 #   - PROGRAM_CRATE: set to the name of your program crate (or remove if workspace root)
-#   - RUST_TOOLCHAIN: pinned to 1.96 per auditor sdk-versions.md
+#   - Host toolchain: dtolnay/rust-toolchain@stable resolves the current stable
+#     (~1.95, 2026-06); on-chain .so builds use platform-tools via cargo build-sbf,
+#     independent of host stable (see auditor sdk-versions.md).
 #   - deny.toml: add a deny.toml at workspace root (see cargo-deny docs)
 #
 # All jobs run in parallel; PR merge requires all green.
@@ -39,10 +41,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain 1.96
+      - name: Install Rust toolchain (host stable)
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.96"
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -72,10 +72,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain 1.96 with clippy
+      - name: Install Rust toolchain (host stable) with clippy
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.96"
           components: clippy
 
       - name: Cache cargo registry
@@ -112,10 +111,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain 1.96
+      - name: Install Rust toolchain (host stable)
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.96"
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -127,10 +124,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install cargo-deny
-        # cargo-deny does not publish 1.x yet; pin to a verified minor version.
-        # Run `cargo search cargo-deny` to confirm latest before pinning.
-        run: cargo install cargo-deny --locked
+      - name: Install cargo-deny 0.19.9
+        # cargo-deny does not publish 1.x yet; 0.19.9 is the last-verified stable
+        # (2026-06). Re-confirm with `cargo search cargo-deny` at audit time.
+        run: cargo install cargo-deny --version 0.19.9 --locked
 
       - name: Run cargo deny check
         # Checks: advisories (CVE db), licenses, bans (forbidden crates), sources
@@ -148,10 +145,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain 1.96
+      - name: Install Rust toolchain (host stable)
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.96"
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -163,9 +158,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Install cargo-geiger
-        # Verify latest on crates.io: cargo search cargo-geiger
-        run: cargo install cargo-geiger --locked
+      - name: Install cargo-geiger 0.13.0
+        # 0.13.0 is the last-verified stable (2026-06); cargo-geiger may lag the
+        # newest host toolchain - if install fails, fall back to a grep sweep for
+        # `unsafe` (see static-analysis.md). Re-confirm with `cargo search`.
+        run: cargo install cargo-geiger --version 0.13.0 --locked
 
       - name: Run cargo geiger (informational)
         run: cargo geiger --all-features 2>&1 || true
@@ -181,10 +178,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain 1.96
+      - name: Install Rust toolchain (host stable)
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.96"
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -197,7 +192,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Run tests
-        # litesvm 0.12 tests run in-process; no validator needed
+        # litesvm 0.13 tests run in-process; no validator needed
         run: cargo test --all-features -- --test-threads=1
 
 # ---------------------------------------------------------------------------

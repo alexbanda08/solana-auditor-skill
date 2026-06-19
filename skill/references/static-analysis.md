@@ -88,9 +88,9 @@ Triage:
 What it catches: counts `unsafe` blocks/functions across the dependency tree and
 the program crate. It quantifies the surface that the borrow checker does NOT
 protect; it does not judge whether any given `unsafe` is wrong. Note: cargo-geiger
-release cadence lags the toolchain - confirm it builds against Rust 1.96 before
-relying on it (see references/sdk-versions.md); if it does not, fall back to a grep
-sweep for `unsafe`.
+release cadence lags the toolchain - pin 0.13.0 (last-verified 2026-06) and confirm
+it builds against your host stable before relying on it (see
+references/sdk-versions.md); if it does not, fall back to a grep sweep for `unsafe`.
 
 ```bash
 cargo geiger --all-features                 # unsafe usage table
